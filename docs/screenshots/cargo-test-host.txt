@@ -1,0 +1,20 @@
+
+running 9 tests
+test forecast::llm_parse_tests::normalize_handles_percent_numbers ... ok
+test forecast::llm_parse_tests::parse_rejects_no_json ... ok
+test forecast::llm_parse_tests::probability_scan_ignores_interest_rates ... ok
+test forecast::llm_parse_tests::parse_bare_json_brief ... ok
+test forecast::llm_parse_tests::parse_fenced_json_brief ... ok
+test forecast::llm_parse_tests::probability_scan_percent_with_context ... ok
+test tests::contract_version_is_semver ... ok
+test tests::forecast_rejects_empty_question ... ok
+test tests::forecast_produces_brief_shape ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test src/lib.rs - __export_forecast_contract_impl (line 28) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+

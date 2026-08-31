@@ -1,0 +1,12 @@
+  autenticado como: did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa
+  TenantClient ready — did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa active
+versión actualmente registrada: 0.1.1
+bump: 0.1.1 -> 0.1.2
+WASM: /Users/josecortesmadrid/cme/holones/bounty-hunter/t3n-agent/my-t3n-app/forecast-contract/target/wasm32-wasip2/release/forecast_contract.wasm (204655 bytes)
+
+✅ REGISTRADO
+   canonical name: z:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa:forecast-contract
+   contract_id: 810
+   version: 0.1.2
+   guardado en scripts/.contract-id.json (necesario para ACLs de maps)
+   map 'secrets' ACL rescopiado a contract_id 810

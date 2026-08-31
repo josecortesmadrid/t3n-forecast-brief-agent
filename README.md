@@ -4,26 +4,7 @@ A **forecasting agent on T3N** (Terminal 3 Network) whose LLM call runs **inside
 
 Registered on T3N testnet (SG cluster) as contract **`z:<tenant-tid>:forecast-contract` v0.1.1** — the live brief for *"Will the Federal Reserve cut rates before October 2026?"* estimated **0.45** with `probability_source: "llm-json"`.
 
-```
-┌────────────────────────────┐
-│  Tenant (you, scripts/)    │  T3N SDK v5.3 · Ethereum-signed session
-│  - secrets in z:<tid>:kv   │  llm_api_key sealed via control-plane write
-└──────────┬─────────────────┘
-           │ register (WASM component) / execute(forecast, input)
-           ▼
-┌────────────────────────────────────────────────────────┐
-│  T3N node — TEE (CN cluster)                           │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ forecast-contract (Rust → wasm32-wasip2)         │  │
-│  │  1. kv-store::get("z:<tid>:secrets")             │  │  ← LLM key never leaves the enclave
-│  │  2. http::call POST openrouter.ai (gated egress) │  │  ← host allowlist: ["openrouter.ai"]
-│  │  3. parse reply → Forecast Brief JSON            │  │  ← fallback brief, never panic
-│  └──────────────────────────────────────────────────┘  │
-└──────────┬─────────────────────────────────────────────┘
-           │ OpenRouter chat/completions (openai/gpt-4o-mini default)
-           ▼
-       Forecast Brief: { summary, probability_estimate, reasoning, sources, meta }
-```
+![Architecture — tenant → TEE contract → OpenRouter → Forecast Brief](docs/screenshots/arch-diagram.png)
 
 ## What it demonstrates
 
@@ -85,13 +66,14 @@ OPENROUTER_MODEL=openrouter/free npm run invoke
 
 ### Contract tests (native)
 
-The forecasting logic is host-independent Rust; `cargo test` runs it natively — no TEE, no node, no keys:
+The forecasting logic is host-independent Rust; `cargo test` runs it natively — no TEE, no node, no keys. Because the crate pins `wasm32-wasip2` globally (`~/.cargo/config.toml`), the host target must be installed once:
 
 ```sh
-cd forecast-contract && cargo test
+rustup target add x86_64-apple-darwin
+cd forecast-contract && CARGO_BUILD_TARGET=x86_64-apple-darwin cargo test
 ```
 
-(3 unit tests: brief shape, empty-question rejection, plus the probability-parser suite — JSON numbers, `"55%"` strings, text scanning that ignores interest-rate percentages, normalization.)
+Verified green: **9 unit tests + 1 doc-test** — brief shape, empty-question rejection, probability-parser suite (JSON numbers, `"55%"` strings, text scanning that ignores interest-rate percentages, normalization).
 
 ### Building the WASM component
 
@@ -151,7 +133,9 @@ We hit three points of SDK ↔ cluster misalignment during the build. Epistemic 
 ## How to run the tests
 
 ```sh
-cd forecast-contract && cargo test     # native unit tests (no keys, no node)
+# native unit tests (no keys, no node); host target needed once:
+# rustup target add x86_64-apple-darwin
+cd forecast-contract && CARGO_BUILD_TARGET=x86_64-apple-darwin cargo test
 cargo clippy --all-targets -- -D warnings   # lint-clean as shipped
 ```
 

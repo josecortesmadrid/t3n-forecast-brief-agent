@@ -1,16 +1,3 @@
-# Secrets — never commit
-.t3n_api_key.txt
-.openrouter_key
-.env
-.env.*
-*.key
-*.pem
-
-# Node
-node_modules/
-
-# Build artifacts
-forecast-contract/target/
-
-# Local state
-scripts/.contract-id.json
+.DS_Store
+**/.DS_Store
+docs/T3N-forecast-brief-agent.docx

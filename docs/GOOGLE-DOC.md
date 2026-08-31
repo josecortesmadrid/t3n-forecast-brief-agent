@@ -12,26 +12,7 @@
 
 Flow: **tenant → agent (scripts / SDK) → TEE contract → LLM → brief (with audit trail)**
 
-```
-┌────────────────────────────┐
-│  Tenant (you, scripts/)    │  T3N SDK v5.3 · Ethereum-signed session
-│  - secrets in z:<tid>:kv   │  llm_api_key sealed via control-plane write
-└──────────┬─────────────────┘
-           │ register (WASM component) / execute(forecast, input)
-           ▼
-┌────────────────────────────────────────────────────────┐
-│  T3N node — TEE (SG testnet cluster)                   │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ forecast-contract (Rust → wasm32-wasip2)         │  │
-│  │  1. kv-store::get("z:<tid>:secrets")             │  │ ← key never leaves the enclave
-│  │  2. http::call POST openrouter.ai (gated egress) │  │ ← host allowlist: ["openrouter.ai"]
-│  │  3. parse reply → Forecast Brief JSON            │  │ ← fallback brief, never panic
-│  └──────────────────────────────────────────────────┘  │
-└──────────┬─────────────────────────────────────────────┘
-           │ OpenRouter chat/completions (openai/gpt-4o-mini default)
-           ▼
-   Forecast Brief: { summary, probability_estimate, reasoning, sources, meta }
-```
+![Architecture — tenant → TEE contract → OpenRouter → Forecast Brief](screenshots/arch-diagram.png)
 
 **Why it matters (usefulness):** enterprise forecasting needs prompts and credentials to stay confidential — the API key is sealed inside the enclave, every outbound host is governed by an explicit delegation grant, and each run is attributable to a pinned contract version on-chain of the testnet. The brief is schema-stable JSON, so it drops directly into dashboards, alerts, or downstream agents.
 
@@ -39,11 +20,25 @@ Flow: **tenant → agent (scripts / SDK) → TEE contract → LLM → brief (wit
 
 ## 3. Screenshots
 
-- `[SCREENSHOT: invoke-output-brief.png]` — real end-to-end invocation: the terminal running `npx tsx scripts/invoke-contract.ts`, showing the authenticated DID, the input, and the parsed **Forecast Brief** with `probability_estimate: 0.45`, `phase: "2-llm-in-tee"`, `probability_source: "llm-json"`. *(Raw text evidence: `docs/evidence-output.txt` in the repo.)*
-- `[SCREENSHOT: registered-contract.png]` — registration output: canonical name `z:<tid>:forecast-contract`, `contract_id`, version bump `0.1.1 → 0.1.2`, and the KV-map ACL re-scoping message. *(Raw text evidence: `docs/evidence-registration.txt`.)*
-- `[SCREENSHOT: egress-grant.png]` — `grant-egress-v2.ts` read-back: the delegation document showing the `BoundGrant` with `allowed_hosts: ["openrouter.ai"]`, `version_req: "0.1.1"`, `functions: ["forecast"]`. *(Raw text evidence: `docs/evidence-egress.txt`.)*
-- `[SCREENSHOT: native-tests.png]` — `cargo test` output inside `forecast-contract/`: 3/3 unit tests passing (brief shape, empty-question rejection, probability-parser suite).
-- `[SCREENSHOT: repo-home.png]` — the public GitHub repository home page.
+- **Live invocation — parsed Forecast Brief (p=0.45, LLM in TEE):**
+
+  ![Live invocation — Forecast Brief](screenshots/shot-invoke.png)
+
+- **Contract registration + KV ACL re-scope (v0.1.2, contract_id 810):**
+
+  ![Contract registration](screenshots/shot-register.png)
+
+- **Egress delegation read-back (BoundGrant → openrouter.ai):**
+
+  ![Egress grant read-back](screenshots/shot-egress.png)
+
+- **`cargo test` — 9/9 unit tests + 1 doc-test green:**
+
+  ![Native tests](screenshots/shot-cargo-test.png)
+
+- **Public GitHub repository home page:**
+
+  ![Repo home](screenshots/repo-home.png)
 
 ## 4. Integration blockers encountered & worked around (T3N SDK v5.3.0 ↔ SG testnet cluster)
 
@@ -108,7 +103,8 @@ npm run setup:kv && npm run register && npm run grant:egress && npm run invoke
 The invoke prints the raw response and the parsed Forecast Brief. Quick verification without a node or any keys:
 
 ```sh
-cd forecast-contract && cargo test   # 3/3 native unit tests
+# unit tests run on the host target (install it once: rustup target add x86_64-apple-darwin)
+CARGO_BUILD_TARGET=x86_64-apple-darwin cargo test   # 9/9 unit tests + 1 doc-test green
 cargo build --target wasm32-wasip2 --release   # rebuild the WASM component after editing Rust
 ```
 
