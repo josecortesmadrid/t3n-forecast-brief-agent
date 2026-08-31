@@ -118,27 +118,29 @@ wasm-tools component wit target/wasm32-wasip2/release/forecast_contract.wasm
 5. **KV maps deny-by-default** — `tenant.maps.create` without explicit `readers`/`writers` ACLs produces deny-all; `create-kv-maps.ts` scopes both to the registered `contract_id`, and `register-contract.ts` re-scopes after every registration (ids change on re-register).
 6. **Model as data, not code** — the LLM model id is an input field (default compiled in), so model trials are an `npm run invoke` flag, not a rebuild.
 
-## Known limitations (bugs found on T3N SDK v5.3.0 — and the workarounds shipped here)
+## SDK ↔ cluster integration blockers (v5.3.0 ↔ SG testnet — workarounds shipped)
 
-These threeSDK v5.3.0 issues cost the most debugging time; all workarounds are already wired into `scripts/lib.ts` / `grant-egress-v2.ts` so the quickstart just runs.
+We hit three points of SDK ↔ cluster misalignment during the build. Epistemic status up front: the workarounds run green, but we **could not determine root cause from the outside** — the SDK ships obfuscated, so whether each item is SDK version lag, intentional CN-cluster config, or a design gap is **a question for the T3N team, not a claim by us**. Where a workaround touches security-sensitive validation, it is flagged as demo-only.
 
-### Bug 1 — `fetchTrustedManifest` rejects a *valid* CN-cluster manifest (missing `rtmr1_allowlist`)
+### Blocker 1 — `fetchTrustedManifest` rejects the SG-cluster manifest (missing `rtmr1_allowlist`)
 
-- **Repro:** `curl https://cn-api.sg.testnet.t3n.terminal3.io/api/trust-manifest` returns well-formed JSON — *without any `rtmr1_allowlist` key*. `manifestToTrustAnchor(manifest)` accepts it, but the SDK's internal `fetchTrustedManifest` path throws `"malformed…"`.
-- **Root cause:** the SDK treats `rtmr1_allowlist` as a required field of the manifest, but the CN cluster's endpoint simply doesn't serve one (RTMR1 attestation differs there — see Bug 2).
-- **Workaround** (`scripts/lib.ts → buildTrustAnchor`): fetch the manifest manually, synthesize `rtmr1_allowlist = rtmr3_allowlist` (a harmless placeholder that Bug 1 stops complaining about), then hand the corrected object to `manifestToTrustAnchor`.
+- **Repro:** `curl https://cn-api.sg.testnet.t3n.terminal3.io/api/trust-manifest` returns well-formed JSON — *without any `rtmr1_allowlist` key*. `manifestToTrustAnchor()` accepts it as-is; the SDK's internal `fetchTrustedManifest` path throws `"malformed…"`.
+- **Observation:** the SDK requires `rtmr1_allowlist` as mandatory; the cluster endpoint doesn't serve that key.
+- **Workaround** (`scripts/lib.ts → buildTrustAnchor`): fetch manually, synthesize the field, then hand the corrected object to `manifestToTrustAnchor`.
+- **For T3N review:** should the endpoint serve `rtmr1_allowlist`, or is the SDK's requirement ahead of this cluster state?
 
-### Bug 2 — `assertNodeTrusted` RTMR1 mismatch (SDK allowlist is stale for the CN cluster)
+### Blocker 2 — `assertNodeTrusted` RTMR1 mismatch ⚠️ security-sensitive, demo-only bypass
 
-- **Repro:** with Bug 1's manifest patched, `t3n.handshake()` fails with `RTMR1 kP0XBuMMdrW4… not in allowlist`. The *node* attests with RTMR1 = `kP0X…`, but the SDK's pinned allowlist only contains `+XO6…` — which is actually the cluster's **RTMR3** value.
-- **Root cause:** the SDK ships an RTMR1 allowlist captured on a different cluster state; CN nodes measure a different RTMR1.
-- **Workaround** (`scripts/lib.ts → connect`): parse the real RTMR1 out of the error message, prepend it to `rtmr1_allowlist`, rebuild the trust anchor, re-handshake — i.e., the client self-heals its allowlist from the node's attested value.
+- **Repro:** with Blocker 1 worked around, `t3n.handshake()` fails with `RTMR1 kP0XBuMMdrW4… not in allowlist`. The *node* attests RTMR1 = `kP0X…`; the SDK's pinned allowlist only contains `+XO6…` — which is actually the cluster's **RTMR3** value.
+- **What we did, explicitly:** the shipped workaround parses the attested RTMR1 and prepends it to the allowlist, **and a local patch disables the `assertNodeTrusted` validation entirely for this demo**. This bypasses TEE attestation — the network's core trust model. We cannot distinguish (a) SG nodes running a newer build the SDK doesn't know from (b) SG nodes attesting differently for a reason the SDK is right to refuse. In case (b) our patch is safe only because this sandbox demo holds no production secrets — **do not ship attestation bypass to any tenant with real data**; the right fix is a published (or dynamically resolved) current allowlist.
+- **For T3N review:** what is the canonical RTMR1 allowlist for SG testnet, and should the SDK pin it or resolve it from a signed feed?
 
-### Bug 3 — `grant-egress` via `tenant.execute` is a silent no-op
+### Blocker 3 — `grant-egress` via `tenant.execute` appears to be a silent no-op
 
-- **Repro:** sending a raw `agent-auth-update` control action over `tee:user/contracts` through `tenant.execute(...)` returns `{}` (looks like success), but the next contract invocation still fails with `host/http.egress_denied`.
-- **Root cause:** `agent-auth-update` on that transport doesn't touch the delegation store that the egress governor actually consults.
-- **Fix** (`scripts/grant-egress-v2.ts`): use the typed read-merge-write on the caller's own delegation edge — `t3n.updateMemberDelegation({grantee, contract_id, functions, scopes, version_req, allowed_hosts}, {discoverDids})`. Verified by read-back (`getMemberDelegation`) and by the successful in-TEE OpenRouter call.
+- **Repro:** sending a raw `agent-auth-update` over `tee:user/contracts` through `tenant.execute(...)` returns `{}` (looks like success), but the next invocation still fails with `host/http.egress_denied`.
+- **Observation:** that transport doesn't appear to touch the delegation store the egress governor consults. Caveat: the payload shape of the first attempt may have been wrong (thin docs on this transport); what we can certify is the *silent no-op failure mode*, which is the most expensive kind to debug.
+- **Workaround** (`scripts/grant-egress-v2.ts`): the typed self-delegation — `t3n.updateMemberDelegation({grantee, contract_id, functions, version_req, allowed_hosts}, {discoverDids})`. Verified by read-back and by the successful in-TEE OpenRouter call.
+- **For T3N review:** which client method is intended for programmatic egress grants, and can the no-op path return an error instead of `{}`?
 
 ### Others (minor)
 
@@ -157,6 +159,7 @@ cargo clippy --all-targets -- -D warnings   # lint-clean as shipped
 
 - Targets T3N **testnet** (SG cluster today). Judged with the SDK pinned `@terminal3/t3n-sdk@^5.3.0`.
 - `probability_estimate` is the LLM's calibrated judgment over provided context — a research artifact, not investment advice.
+- **Security note:** the attestation-validation workaround (Blocker 2) is for this testnet demo only and must not be carried to any environment with production data — see the flagged section above for the T3N-review questions.
 - `scripts/invoke-contract.ts` ships one example question (Fed rates). The brief is schema-stable, so downstream products can swap the question/context freely.
 
 ## Post-challenge roadmap
