@@ -1,0 +1,60 @@
+/// forecast-contract — T3N Forecast Brief Agent (bounty).
+///
+/// Toma una pregunta de forecasting + contexto y produce un Forecast Brief en
+/// JSON. Fase 1 (este skeleton): lógica placeholder que valida el input, arma
+/// estructura y la serializa — sin llamada real a LLM todavía.
+///
+/// Imports de host (capability set mínimo, fase 1):
+///   - tenant-context: tenant DID (para construir el nombre del KV map de
+///     secrets cuando conectemos la LLM key, y timestamp del cluster para el
+///     campo `generated_at` del brief).
+///   - logging:        trazas dentro del enclave.
+///   - kv-store:       leer `llm_api_key` del map `z:<tid>:secrets` (fase 2,
+///     ya importado para no romper el ABI al agregarlo).
+///
+/// No importamos http todavía: la llamada real al LLM es fase 2, y los imports
+/// WIT son todo el capability set — importar de menos no rompe nada, importar
+/// de más puede hacer que el host rechace el contract si el tenant world no
+/// provee esa interfaz.
+package z:forecast-contract@0.1.0;
+
+/// Fase 2: el world exporta `contracts@0.1.0` sin cambios de shape — el bump
+/// real de versión va en Cargo.toml/CONTRACT_VERSION. NO subir esto a 0.1.1:
+/// ver sesión 2026-08-31, testnet rechazó componentes con interface bump.
+
+world forecast-contract {
+    import host:tenant/tenant-context@1.0.0;
+    import host:interfaces/logging@2.1.0;
+    import host:interfaces/kv-store@2.1.0;
+    // Fase 2: outbound HTTP para la llamada LLM (OpenRouter). Importar http
+    // linkea el contract contra el world `tenant-http` — capability gate del
+    // egress. La autorización por host vive en el grant del calling user
+    // (agent-auth-update con allowedHosts), no aquí.
+    import host:interfaces/http@2.1.0;
+
+    export contracts;
+}
+
+interface contracts {
+    /// Envelope estándar de 3 campos usado por todo contract llamado desde el
+    /// nodo (mismo shape que el contract de referencia z-tenant-flight).
+    /// `input`        — JSON de la request, como bytes.
+    /// `user-profile` — None para tenant contracts.
+    /// `context`      — DynamicContext minteado por el nodo (trusted), bytes.
+    record generic-input {
+        input:        option<list<u8>>,
+        user-profile: option<list<u8>>,
+        context:      option<list<u8>>,
+    }
+
+    /// Produce un Forecast Brief en JSON.
+    ///
+    /// Input  (JSON): { "question": string, "context": string,
+    ///                  "llm_key_placeholder"?: string }
+    /// Output (JSON): { "summary", "probability_estimate", "reasoning",
+    ///                  "sources_placeholder", "meta" }
+    ///
+    /// El nombre de la función ES el export — no hay dispatch central ni
+    /// ContractError enum. Errores: string plano en el `err` del result.
+    forecast: func(req: generic-input) -> result<list<u8>, string>;
+}

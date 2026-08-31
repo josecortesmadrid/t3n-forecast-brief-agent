@@ -1,0 +1,6 @@
+  autenticado como: did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa
+  TenantClient ready — did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa active
+grant v2: did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa → z:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa:forecast-contract v0.1.1 hosts: [openrouter.ai]
+delegation doc actual: {"grants":[{"grantee":"did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa","contract_id":"z:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa:forecast-contract","functions":["forecast"],"scopes":[],"version_req":"0.1.1","allowed_hosts":["openrouter.ai"],"window":{"valid_from_secs":1788165582,"valid_until_secs":1795941582}}],"discover_dids":["did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa"]}
+✅ grant OK (member-delegation-update): {"preservedRows":[]}
+delegation doc tras write: {"grants":[{"grantee":"did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa","contract_id":"z:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa:forecast-contract","functions":["forecast"],"scopes":[],"version_req":"0.1.1","allowed_hosts":["openrouter.ai"],"window":{"valid_from_secs":1788166280,"valid_until_secs":1795942280}}],"discover_dids":["did:t3n:cc2ee922b9d2328c98aebf6f97c1d36b7814ebaa"]}
